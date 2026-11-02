@@ -26,6 +26,8 @@ from shell.builtins import search as _search
 from shell.builtins import system as _system
 from sim.commands import cmd_sched
 from sim.commands import cmd_deadlock
+from compare.compare import cmd_compare
 
 REGISTRY["sched"] = cmd_sched
 REGISTRY["deadlock"] = cmd_deadlock
+REGISTRY["compare"] = cmd_compare
