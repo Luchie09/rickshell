@@ -55,3 +55,29 @@ def false_command(
 ) -> int:
     """Return an unsuccessful exit code."""
     return 1
+
+
+@register("clear")
+def cmd_clear(
+    args: list[str],
+    stdin: TextIO,
+    stdout: TextIO,
+    stderr: TextIO,
+    ctx: ShellContext,
+) -> int:
+    """Clear a terminal without producing escape codes in redirected output."""
+    if args:
+        stderr.write("clear: usage: clear\n")
+        return 2
+
+    try:
+        is_terminal = stdout.isatty()
+    except (AttributeError, OSError):
+        is_terminal = False
+
+    if is_terminal:
+        # Home, clear display, then clear scrollback; terminals interpret these codes.
+        stdout.write("\033[H\033[2J\033[3J")
+        stdout.flush()
+    # Non-terminals receive no output so redirects and pipes stay clean.
+    return 0
