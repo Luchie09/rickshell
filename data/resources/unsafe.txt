@@ -1,0 +1,10 @@
+# Two processes each hold one resource and need the other.
+2 2
+# Allocation
+1 0
+0 1
+# Maximum claims
+1 1
+1 1
+# Available
+0 0

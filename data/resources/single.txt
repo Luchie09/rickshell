@@ -1,0 +1,5 @@
+# One process with one resource type.
+1 1
+1
+3
+2

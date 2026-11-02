@@ -1,0 +1,3 @@
+# No processes, with two resource types.
+0 2
+3 3
