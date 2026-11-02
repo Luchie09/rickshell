@@ -9,7 +9,7 @@ from shell.builtins import REGISTRY
 from shell.builtins import system as _system
 from shell.builtins import vars as _vars
 from shell.context import ShellContext
-from shell.parser import Command, CommandList, Pipeline
+from shell.parser import Command, CommandList, IfBlock, Pipeline
 from shell.tokenizer import Token
 
 EXPANSION_PATTERN = re.compile(r"\$(\?|[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})")
@@ -188,12 +188,39 @@ def execute(
         if not should_run:
             continue
 
-        ctx.last_exit_code = _run_pipeline(
-            pipeline,
-            ctx,
-            stdin,
-            stdout,
-            stderr,
-        )
+        if isinstance(pipeline, IfBlock):
+            condition_code = execute(
+                pipeline.condition,
+                ctx,
+                stdin,
+                stdout,
+                stderr,
+            )
+            if condition_code == 0:
+                ctx.last_exit_code = execute(
+                    pipeline.then_body,
+                    ctx,
+                    stdin,
+                    stdout,
+                    stderr,
+                )
+            elif pipeline.else_body is not None:
+                ctx.last_exit_code = execute(
+                    pipeline.else_body,
+                    ctx,
+                    stdin,
+                    stdout,
+                    stderr,
+                )
+            else:
+                ctx.last_exit_code = 0
+        else:
+            ctx.last_exit_code = _run_pipeline(
+                pipeline,
+                ctx,
+                stdin,
+                stdout,
+                stderr,
+            )
 
     return ctx.last_exit_code
