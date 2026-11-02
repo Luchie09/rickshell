@@ -1,6 +1,6 @@
 """Shared resource-state and safety-check foundations for deadlock tools."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -12,6 +12,11 @@ class ResourceState:
     allocation: list[list[int]]
     max_claim: list[list[int]]
     available: list[int]
+    process_states: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.process_states:
+            self.process_states = ["Ready"] * self.n
 
     def need(self) -> list[list[int]]:
         """Return each process's remaining maximum resource requirement."""
@@ -32,6 +37,7 @@ class ResourceState:
             [row.copy() for row in self.allocation],
             [row.copy() for row in self.max_claim],
             self.available.copy(),
+            self.process_states.copy(),
         )
 
     def pid(self, index: int) -> str:
@@ -105,3 +111,44 @@ def detect(state: ResourceState) -> list[str]:
         for process in range(state.n)
         if not finished[process]
     ]
+
+
+def request_resources(
+    state: ResourceState,
+    pid: str,
+    vector: list[int],
+) -> tuple[str, list[str]]:
+    """Try a resource request and return its outcome and safe sequence.
+
+    The input state is changed only for a granted request. A waiting process
+    is marked Waiting; exceeded and denied requests leave resources unchanged.
+    """
+    try:
+        process = int(pid[1:]) if pid.startswith("P") else -1
+    except ValueError:
+        process = -1
+    if process < 0 or process >= state.n or len(vector) != state.m:
+        return "invalid", []
+
+    needed = state.need()
+    if any(vector[j] > needed[process][j] for j in range(state.m)):
+        return "exceeded", []
+
+    if any(vector[j] > state.available[j] for j in range(state.m)):
+        state.process_states[process] = "Waiting"
+        return "wait", []
+
+    trial = state.copy()
+    for resource in range(state.m):
+        trial.available[resource] -= vector[resource]
+        trial.allocation[process][resource] += vector[resource]
+
+    safe, sequence, _stuck = safety_check(trial)
+    if not safe:
+        return "denied", []
+
+    state.available = trial.available
+    state.allocation = trial.allocation
+    state.process_states = trial.process_states
+    state.process_states[process] = "Ready"
+    return "granted", sequence

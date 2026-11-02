@@ -4,7 +4,7 @@ import os
 from typing import TextIO
 
 from shell.context import ShellContext
-from sim.deadlock import detect, safety_check
+from sim.deadlock import detect, request_resources, safety_check
 from sim.gantt import merge_segments, render_gantt
 from sim.loader import LoaderError, load_processes, load_resources
 from sim.metrics import compute_metrics, format_metrics_table
@@ -151,11 +151,25 @@ def cmd_deadlock(
 ) -> int:
     """Detect deadlocked processes or check a resource state for safety."""
     usage = "usage: deadlock <detect|banker> <file>"
-    if len(args) != 2 or args[0] not in {"detect", "banker"}:
+    request_usage = (
+        "usage: deadlock banker <file> --request <PID> <r1> ... <rm>"
+    )
+    if len(args) < 2 or args[0] not in {"detect", "banker"}:
         stderr.write(usage + "\n")
         return 2
 
-    subcommand, file_name = args
+    subcommand, file_name = args[:2]
+    request_args: list[str] | None = None
+    if subcommand == "detect":
+        if len(args) != 2:
+            stderr.write(usage + "\n")
+            return 2
+    elif len(args) > 2:
+        if len(args) < 4 or args[2] != "--request":
+            stderr.write(request_usage + "\n")
+            return 2
+        request_args = args[3:]
+
     file_path = os.path.join(ctx.cwd, file_name)
     try:
         state = load_resources(file_path)
@@ -174,6 +188,56 @@ def cmd_deadlock(
         else:
             stdout.write("No deadlock found.\n")
         return 0
+
+    if request_args is not None:
+        if len(request_args) != state.m + 1:
+            stderr.write(request_usage + "\n")
+            return 2
+
+        pid = request_args[0]
+        if not pid.startswith("P") or not pid[1:].isdigit():
+            stderr.write(f"deadlock: unknown process '{pid}'\n")
+            return 2
+        process_index = int(pid[1:])
+        if process_index >= state.n:
+            stderr.write(f"deadlock: unknown process '{pid}'\n")
+            return 2
+
+        try:
+            vector = [int(value) for value in request_args[1:]]
+        except ValueError:
+            stderr.write(request_usage + "\n")
+            return 2
+        if any(value < 0 for value in vector):
+            stderr.write(request_usage + "\n")
+            return 2
+
+        result, sequence = request_resources(state, pid, vector)
+        if result == "exceeded":
+            stderr.write(f"error: {pid} exceeded its maximum claim\n")
+            return 1
+        if result == "wait":
+            stdout.write(
+                f"{pid} must wait: request exceeds available resources. "
+                "State: Waiting\n"
+            )
+            return 0
+        if result == "denied":
+            stdout.write(
+                "Request denied: granting it would leave the system in an "
+                "UNSAFE state. Rolled back.\n"
+            )
+            return 0
+        if result == "granted":
+            stdout.write(
+                "Request granted. Safe sequence: "
+                + " -> ".join(sequence)
+                + "\n"
+            )
+            return 0
+
+        stderr.write(request_usage + "\n")
+        return 2
 
     safe, sequence, stuck = safety_check(state)
     if safe and not sequence:
