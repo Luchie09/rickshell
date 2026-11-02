@@ -20,15 +20,15 @@ def build_prompt(ctx: ShellContext) -> str:
     try:
         relative_path = os.path.relpath(cwd, start_dir)
     except ValueError:
-        return ctx.cwd + "> "
+        return ctx.cwd + " > "
 
     if relative_path == os.curdir:
-        return base + "> "
+        return base + " > "
     if relative_path != os.pardir and not relative_path.startswith(
         os.pardir + os.sep
     ):
-        return base + os.sep + relative_path + "> "
-    return ctx.cwd + "> "
+        return base + os.sep + relative_path + " > "
+    return ctx.cwd + " > "
 
 
 def run(ctx: ShellContext) -> None:
