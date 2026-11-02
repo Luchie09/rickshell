@@ -1,5 +1,6 @@
 """Read, dispatch, and run shell commands."""
 
+import os
 import sys
 
 from shell.builtins import system  # Importing this module registers the built-ins.
@@ -9,14 +10,35 @@ from shell.executor import execute
 from shell.parser import parse
 from shell.tokenizer import ShellSyntaxError, tokenize
 
-PROMPT = "rickshell> "
+
+def build_prompt(ctx: ShellContext) -> str:
+    """Show paths relative to the directory where this shell started."""
+    cwd = os.path.abspath(ctx.cwd)
+    start_dir = os.path.abspath(ctx.start_dir)
+    start_name = os.path.basename(os.path.normpath(start_dir)) or start_dir
+
+    try:
+        remainder = os.path.relpath(cwd, start_dir)
+    except ValueError:
+        remainder = os.pardir
+
+    if os.path.normcase(cwd) == os.path.normcase(start_dir):
+        display_path = start_name
+    elif remainder != os.pardir and not remainder.startswith(
+        os.pardir + os.sep
+    ):
+        display_path = os.path.join(start_name, remainder)
+    else:
+        display_path = cwd
+
+    return f"rickshell:{display_path}> "
 
 
 def run(ctx: ShellContext) -> None:
     """Run the interactive shell until it receives an exit request or EOF."""
     while ctx.running:
         try:
-            sys.stdout.write(PROMPT)
+            sys.stdout.write(build_prompt(ctx))
             sys.stdout.flush()
             line = sys.stdin.readline()
 

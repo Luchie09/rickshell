@@ -17,3 +17,8 @@ def register(name: str) -> Callable[[Command], Command]:
         return command
 
     return decorator
+
+
+# Import built-ins after register is defined so their decorators can populate the registry.
+from shell.builtins import files as _files
+from shell.builtins import perms as _perms
