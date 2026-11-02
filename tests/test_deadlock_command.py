@@ -36,7 +36,13 @@ class DeadlockCommandTests(unittest.TestCase):
         )
         self.assertEqual(
             self.run_deadlock(["detect", "unsafe.txt"]),
-            (0, "Deadlock detected. Deadlocked processes: P0, P1\n", ""),
+            (
+                0,
+                "Deadlock detected. Deadlocked processes: P0, P1\n"
+                "Recovery suggestion: Terminate P0\n"
+                "Preemption note: Preempt R1 from P1\n",
+                "",
+            ),
         )
         self.assertEqual(
             self.run_deadlock(["detect", "empty.txt"]),

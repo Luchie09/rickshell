@@ -4,7 +4,12 @@ import os
 from typing import TextIO
 
 from shell.context import ShellContext
-from sim.deadlock import detect, request_resources, safety_check
+from sim.deadlock import (
+    detect,
+    recovery_suggestion,
+    request_resources,
+    safety_check,
+)
 from sim.gantt import merge_segments, render_gantt
 from sim.loader import LoaderError, load_processes, load_resources
 from sim.metrics import compute_metrics, format_metrics_table
@@ -185,6 +190,15 @@ def cmd_deadlock(
                 + ", ".join(deadlocked)
                 + "\n"
             )
+            order, preemption_note = recovery_suggestion(state, deadlocked)
+            if order:
+                stdout.write(
+                    "Recovery suggestion: Terminate "
+                    + ", then ".join(order)
+                    + "\n"
+                )
+            if preemption_note:
+                stdout.write(f"Preemption note: {preemption_note}\n")
         else:
             stdout.write("No deadlock found.\n")
         return 0

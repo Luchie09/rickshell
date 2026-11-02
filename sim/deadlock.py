@@ -152,3 +152,79 @@ def request_resources(
     state.process_states = trial.process_states
     state.process_states[process] = "Ready"
     return "granted", sequence
+
+
+def recovery_suggestion(
+    state: ResourceState,
+    deadlocked: list[str],
+) -> tuple[list[str], str]:
+    """Suggest process terminations and a resource preemption without mutation."""
+    deadlocked_indices = {
+        int(pid[1:])
+        for pid in deadlocked
+        if pid.startswith("P") and pid[1:].isdigit()
+    }
+    if not deadlocked_indices:
+        return [], ""
+
+    needed = state.need()
+    work = state.available.copy()
+    # Processes not in the original deadlock finish in the initial detection
+    # pass, so their allocations are available to the recovery simulation.
+    for process in range(state.n):
+        if process not in deadlocked_indices:
+            for resource in range(state.m):
+                work[resource] += state.allocation[process][resource]
+
+    remaining = set(deadlocked_indices)
+    order: list[str] = []
+    while remaining:
+        made_progress = False
+        # Rerun Work/Finish over the still-deadlocked processes in PID order.
+        for process in range(state.n):
+            if process not in remaining:
+                continue
+            if all(
+                needed[process][resource] <= work[resource]
+                for resource in range(state.m)
+            ):
+                for resource in range(state.m):
+                    work[resource] += state.allocation[process][resource]
+                remaining.remove(process)
+                made_progress = True
+        if made_progress:
+            continue
+
+        # Recover by terminating the remaining process holding most resources.
+        victim = min(
+            remaining,
+            key=lambda index: (
+                -sum(state.allocation[index]),
+                index,
+            ),
+        )
+        for resource in range(state.m):
+            work[resource] += state.allocation[victim][resource]
+        remaining.remove(victim)
+        order.append(state.pid(victim))
+
+    first_deadlocked = min(deadlocked_indices)
+    preemption_note = ""
+    for resource in range(state.m):
+        if needed[first_deadlocked][resource] <= state.available[resource]:
+            continue
+
+        holders = [
+            process
+            for process in deadlocked_indices
+            if process != first_deadlocked
+        ]
+        if holders:
+            holder = min(
+                holders,
+                key=lambda index: (-state.allocation[index][resource], index),
+            )
+            preemption_note = f"Preempt R{resource} from {state.pid(holder)}"
+        break
+
+    return order, preemption_note

@@ -1,0 +1,14 @@
+# Two independent resource cycles require one termination each.
+4 4
+# Allocation: P0/P2 form one cycle; P1/P3 form another.
+1 0 0 0
+0 0 1 0
+0 1 0 0
+0 0 0 1
+# Maximum claims
+1 1 0 0
+0 0 1 1
+1 1 0 0
+0 0 1 1
+# Available
+0 0 0 0
