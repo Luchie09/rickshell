@@ -12,26 +12,23 @@ from shell.tokenizer import ShellSyntaxError, tokenize
 
 
 def build_prompt(ctx: ShellContext) -> str:
-    """Show paths relative to the directory where this shell started."""
-    cwd = os.path.abspath(ctx.cwd)
+    """Return the working directory relative to where the shell started."""
     start_dir = os.path.abspath(ctx.start_dir)
-    start_name = os.path.basename(os.path.normpath(start_dir)) or start_dir
+    cwd = os.path.abspath(ctx.cwd)
+    base = os.path.basename(os.path.normpath(start_dir))
 
     try:
-        remainder = os.path.relpath(cwd, start_dir)
+        relative_path = os.path.relpath(cwd, start_dir)
     except ValueError:
-        remainder = os.pardir
+        return ctx.cwd + "> "
 
-    if os.path.normcase(cwd) == os.path.normcase(start_dir):
-        display_path = start_name
-    elif remainder != os.pardir and not remainder.startswith(
+    if relative_path == os.curdir:
+        return base + "> "
+    if relative_path != os.pardir and not relative_path.startswith(
         os.pardir + os.sep
     ):
-        display_path = os.path.join(start_name, remainder)
-    else:
-        display_path = cwd
-
-    return f"rickshell:{display_path}> "
+        return base + os.sep + relative_path + "> "
+    return ctx.cwd + "> "
 
 
 def run(ctx: ShellContext) -> None:

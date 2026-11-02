@@ -25,5 +25,7 @@ from shell.builtins import perms as _perms
 from shell.builtins import search as _search
 from shell.builtins import system as _system
 from sim.commands import cmd_sched
+from sim.commands import cmd_deadlock
 
 REGISTRY["sched"] = cmd_sched
+REGISTRY["deadlock"] = cmd_deadlock

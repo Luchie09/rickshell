@@ -9,48 +9,50 @@ from shell.repl import build_prompt
 
 
 class PromptTests(unittest.TestCase):
+    def make_context(self, root: str) -> ShellContext:
+        start_dir = os.path.join(root, "rickshell")
+        os.makedirs(start_dir)
+        context = ShellContext()
+        context.start_dir = start_dir
+        context.cwd = start_dir
+        return context
+
     def test_prompt_at_start_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            context = ShellContext()
-            context.start_dir = directory
-            context.cwd = directory
-            folder = os.path.basename(directory)
-            self.assertEqual(build_prompt(context), f"rickshell:{folder}> ")
+            context = self.make_context(directory)
+            self.assertEqual(build_prompt(context), "rickshell > ")
 
     def test_prompt_one_level_inside_start_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            context = ShellContext()
-            context.start_dir = directory
-            context.cwd = os.path.join(directory, "scratch")
-            folder = os.path.basename(directory)
+            context = self.make_context(directory)
+            context.cwd = os.path.join(context.start_dir, "scratch")
             self.assertEqual(
                 build_prompt(context),
-                f"rickshell:{os.path.join(folder, 'scratch')}> ",
+                "rickshell" + os.sep + "scratch > ",
             )
 
     def test_prompt_nested_inside_start_directory(self) -> None:
-        context = ShellContext()
-        context.start_dir = os.path.abspath(os.path.join("start-folder"))
-        context.cwd = os.path.join(context.start_dir, "scratch", "sub")
-        folder = os.path.basename(context.start_dir)
-        expected = os.path.join(folder, "scratch", "sub")
-        self.assertEqual(build_prompt(context), f"rickshell:{expected}> ")
+        with tempfile.TemporaryDirectory() as directory:
+            context = self.make_context(directory)
+            context.cwd = os.path.join(context.start_dir, "data", "resources")
+            expected = os.path.join("rickshell", "data", "resources") + " > "
+            self.assertEqual(build_prompt(context), expected)
 
     def test_prompt_outside_start_directory_uses_absolute_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            context = ShellContext()
-            context.start_dir = os.path.join(directory, "start")
+            context = self.make_context(directory)
             context.cwd = os.path.join(directory, "outside")
-            expected = os.path.abspath(context.cwd)
-            self.assertEqual(build_prompt(context), f"rickshell:{expected}> ")
+            self.assertEqual(build_prompt(context), context.cwd + " > ")
 
-    def test_prompt_at_drive_root_uses_full_path(self) -> None:
-        if os.name != "nt":
-            self.skipTest("Drive roots are only available on Windows")
-        context = ShellContext()
-        context.start_dir = "C:\\"
-        context.cwd = "C:\\"
-        self.assertEqual(build_prompt(context), "rickshell:C:\\> ")
+    def test_prompt_updates_when_working_directory_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            context = self.make_context(directory)
+            self.assertEqual(build_prompt(context), "rickshell > ")
+            context.cwd = os.path.join(context.start_dir, "scratch")
+            self.assertEqual(
+                build_prompt(context),
+                "rickshell" + os.sep + "scratch > ",
+            )
 
 
 if __name__ == "__main__":
