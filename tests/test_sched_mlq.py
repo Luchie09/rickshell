@@ -194,16 +194,5 @@ class MultilevelQueueCommandTests(unittest.TestCase):
             self.assertIn("Trace:\n", stdout.getvalue())
             self.assertIn("Running -> Ready", stdout.getvalue())
 
-            result = cmd_sched(
-                ["mlfq", "input.txt"],
-                io.StringIO(),
-                io.StringIO(),
-                stderr := io.StringIO(),
-                context,
-            )
-            self.assertEqual(result, 1)
-            self.assertIn("sched: mlfq is not implemented yet\n", stderr.getvalue())
-
-
 if __name__ == "__main__":
     unittest.main()

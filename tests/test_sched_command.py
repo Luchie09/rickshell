@@ -109,7 +109,7 @@ class SchedulerCommandTests(unittest.TestCase):
             "too many arguments",
         )
 
-    def test_load_errors_and_unimplemented_algorithm(self) -> None:
+    def test_load_errors(self) -> None:
         result, output, error = self.run_sched(
             ["fcfs", "data/processes/missing.txt"]
         )
@@ -125,14 +125,6 @@ class SchedulerCommandTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertEqual(len(error.splitlines()), 1)
         self.assertIn("line 3:", error)
-
-        result, output, error = self.run_sched(
-            ["mlfq", "data/processes/p_basic.txt"]
-        )
-        self.assertEqual(result, 1)
-        self.assertEqual(output, "")
-        self.assertEqual(len(error.splitlines()), 1)
-        self.assertIn("sched: mlfq is not implemented yet", error)
 
     def test_options_are_accepted_in_any_order(self) -> None:
         first = self.run_sched(

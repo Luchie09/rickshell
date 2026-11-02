@@ -8,7 +8,14 @@ from sim.gantt import merge_segments, render_gantt
 from sim.loader import LoaderError, load_processes
 from sim.metrics import compute_metrics, format_metrics_table
 from sim.pcb import format_pcb_table
-from sim.scheduler import fcfs, multilevel_queue, priority, round_robin, sjn
+from sim.scheduler import (
+    fcfs,
+    multilevel_feedback_queue,
+    multilevel_queue,
+    priority,
+    round_robin,
+    sjn,
+)
 
 USAGE = (
     "sched: usage: sched <fcfs|sjn|priority|rr|mlq|mlfq> "
@@ -21,8 +28,8 @@ ALGORITHMS = {
     "priority": priority,
     "rr": round_robin,
     "mlq": multilevel_queue,
+    "mlfq": multilevel_feedback_queue,
 }
-VALID_ALGORITHMS = {"fcfs", "sjn", "priority", "rr", "mlq", "mlfq"}
 
 
 def _write_error(stderr: TextIO, message: str) -> int:
@@ -80,16 +87,12 @@ def cmd_sched(
         return _write_error(stderr, USAGE.removeprefix("sched: "))
 
     algorithm_name = positional[0]
-    if algorithm_name not in VALID_ALGORITHMS:
+    if algorithm_name not in ALGORITHMS:
         return _write_error(stderr, f"unknown algorithm '{algorithm_name}'")
     if len(positional) == 1:
         return _write_error(stderr, USAGE.removeprefix("sched: "))
     if len(positional) > 2:
         return _write_error(stderr, "too many arguments")
-
-    if algorithm_name not in ALGORITHMS:
-        stderr.write(f"sched: {algorithm_name} is not implemented yet\n")
-        return 1
 
     file_path = os.path.join(ctx.cwd, positional[1])
     try:
@@ -108,10 +111,12 @@ def cmd_sched(
 
     # Keep original segments for metrics and merge only for chart display.
     events: list[str] | None = (
-        [] if trace and algorithm_name in {"rr", "mlq"} else None
+        [] if trace and algorithm_name in {"rr", "mlq", "mlfq"} else None
     )
     if algorithm_name in {"rr", "mlq"}:
         segments = ALGORITHMS[algorithm_name](processes, quantum or 4, events)
+    elif algorithm_name == "mlfq":
+        segments = multilevel_feedback_queue(processes, events)
     else:
         segments = ALGORITHMS[algorithm_name](processes)
     stdout.write("Gantt chart:\n")

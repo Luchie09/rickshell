@@ -261,3 +261,104 @@ def multilevel_queue(
             running = None
 
     return segments
+
+
+def multilevel_feedback_queue(
+    processes: list[Process],
+    events: list[str] | None = None,
+) -> list[Segment]:
+    """Run three feedback levels: RR(2), RR(4), then FCFS."""
+    for process in processes:
+        process.reset()
+
+    segments: list[Segment] = []
+    time = 0
+    queues: list[list[Process]] = [[], [], []]
+    running: Process | None = None
+    running_level = 0
+    slice_used = 0
+    admitted: set[str] = set()
+    quanta = (2, 4, None)
+
+    def admit_arrivals(at_time: int) -> None:
+        for process in processes:
+            if (
+                process.state != TERMINATED
+                and process.pid not in admitted
+                and process.arrival == at_time
+            ):
+                if events is not None:
+                    events.append(
+                        f"t={at_time} {process.pid} {NEW} -> {READY}"
+                    )
+                process.state = READY
+                admitted.add(process.pid)
+                # All new work starts at the most responsive priority level.
+                queues[0].append(process)
+
+    # Each level has its own queue: RR with quanta 2 and 4, then FCFS.
+    while any(process.state != TERMINATED for process in processes):
+        admit_arrivals(time)
+
+        # A process runs only while no higher-priority level has ready work.
+        if running is not None and any(
+            queues[level] for level in range(running_level)
+        ):
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {RUNNING} -> {READY}"
+                )
+            running.state = READY
+            # Keep its current level; preemption is not a quantum demotion.
+            queues[running_level].append(running)
+            running = None
+
+        if running is None:
+            for level in range(3):
+                if queues[level]:
+                    running = queues[level].pop(0)
+                    running_level = level
+                    if events is not None:
+                        events.append(
+                            f"t={time} {running.pid} {READY} -> {RUNNING}"
+                        )
+                    running.state = RUNNING
+                    if running.start_time is None:
+                        running.start_time = time
+                    # A process gets a fresh quantum whenever it is dispatched.
+                    slice_used = 0
+                    break
+
+        if running is None:
+            segments.append(("IDLE", time, time + 1))
+            time += 1
+            continue
+
+        running.remaining -= 1
+        slice_used += 1
+        segments.append((running.pid, time, time + 1))
+        time += 1
+
+        # Admit boundary arrivals before finishing/demoting the running process.
+        admit_arrivals(time)
+
+        if running.remaining == 0:
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {RUNNING} -> {TERMINATED}"
+                )
+            running.completion_time = time
+            running.state = TERMINATED
+            running = None
+        elif (
+            running_level < 2
+            and slice_used == quanta[running_level]
+        ):
+            if events is not None:
+                events.append(f"t={time} {running.pid} {RUNNING} -> {READY}")
+            running_level += 1
+            running.state = READY
+            queues[running_level].append(running)
+            running = None
+
+    return segments
