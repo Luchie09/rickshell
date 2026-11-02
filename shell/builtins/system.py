@@ -31,3 +31,27 @@ def help_command(
     for name in sorted(REGISTRY):
         print(name, file=stdout)
     return 0
+
+
+@register("true")
+def true_command(
+    args: list[str],
+    stdin: TextIO,
+    stdout: TextIO,
+    stderr: TextIO,
+    ctx: ShellContext,
+) -> int:
+    """Return a successful exit code."""
+    return 0
+
+
+@register("false")
+def false_command(
+    args: list[str],
+    stdin: TextIO,
+    stdout: TextIO,
+    stderr: TextIO,
+    ctx: ShellContext,
+) -> int:
+    """Return an unsuccessful exit code."""
+    return 1

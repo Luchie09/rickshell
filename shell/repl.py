@@ -2,9 +2,12 @@
 
 import sys
 
-from shell.builtins import REGISTRY
 from shell.builtins import system  # Importing this module registers the built-ins.
+from shell.builtins import vars as _vars  # Register variable-related built-ins.
 from shell.context import ShellContext
+from shell.executor import execute
+from shell.parser import parse
+from shell.tokenizer import ShellSyntaxError, tokenize
 
 PROMPT = "rickshell> "
 
@@ -21,27 +24,21 @@ def run(ctx: ShellContext) -> None:
                 ctx.running = False
                 break
 
-            words = line.split()
-            if not words:
+            tokens = tokenize(line)
+            if not tokens:
                 continue
 
-            name = words[0]
-            command = REGISTRY.get(name)
-            if command is None:
-                print(
-                    f"rickshell: {name}: command not found",
-                    file=sys.stderr,
-                )
-                ctx.last_exit_code = 127
-                continue
-
-            ctx.last_exit_code = command(
-                words[1:],
+            command_list = parse(tokens)
+            execute(
+                command_list,
+                ctx,
                 sys.stdin,
                 sys.stdout,
                 sys.stderr,
-                ctx,
             )
+        except ShellSyntaxError as error:
+            ctx.last_exit_code = 2
+            print(f"rickshell: syntax error: {error}", file=sys.stderr)
         except KeyboardInterrupt:
             sys.stdout.write("\n")
         except Exception as error:
