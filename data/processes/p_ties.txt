@@ -1,0 +1,4 @@
+# Equal arrivals, bursts, and priorities
+P1 0 4 2
+P2 0 4 2
+P3 0 3 1
