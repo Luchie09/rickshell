@@ -1,6 +1,7 @@
 """Plain-text search commands."""
 
 import os
+import re
 from typing import TextIO
 
 from shell.builtins import register
@@ -14,19 +15,25 @@ def _read_stream(
     pattern: str,
     ignore_case: bool,
     show_line_numbers: bool,
+    regex: re.Pattern[str] | None,
+    show_groups: bool,
     filename: str | None,
     multiple_files: bool,
     stdout: TextIO,
 ) -> tuple[bool, Exception | None]:
     """Write matching lines and return whether any matched or errored."""
     matched = False
-    comparison_pattern = pattern.lower() if ignore_case else pattern
 
     try:
         for line_number, line in enumerate(stream, start=1):
-            comparison_line = line.lower() if ignore_case else line
-            if comparison_pattern not in comparison_line:
+            found = regex.search(line) if regex is not None else None
+            if regex is not None and found is None:
                 continue
+            if regex is None:
+                comparison_pattern = pattern.lower() if ignore_case else pattern
+                comparison_line = line.lower() if ignore_case else line
+                if comparison_pattern not in comparison_line:
+                    continue
 
             prefix = ""
             if multiple_files and filename is not None:
@@ -38,6 +45,12 @@ def _read_stream(
             if line.endswith("\n"):
                 line = line[:-1]
             print(f"{prefix}{line}", file=stdout)
+            if show_groups and found is not None and found.groups():
+                groups = "  ".join(
+                    f"{group_index}={found.group(group_index) or ''}"
+                    for group_index in range(1, len(found.groups()) + 1)
+                )
+                print(f"  groups: {groups}", file=stdout)
             matched = True
     except Exception as error:
         return matched, error
@@ -70,29 +83,49 @@ def cmd_grep(
     """Print lines containing a plain-text pattern."""
     ignore_case = False
     show_line_numbers = False
+    extended_regex = False
+    show_groups = False
     index = 0
+    positional: list[str] = []
 
-    while index < len(args) and args[index].startswith("-"):
+    while index < len(args):
         flag_word = args[index]
-        if flag_word == "-":
+        if flag_word == "-E":
+            extended_regex = True
+        elif flag_word == "--groups":
+            extended_regex = True
+            show_groups = True
+        elif flag_word.startswith("-") and flag_word != "-":
+            for flag in flag_word[1:]:
+                if flag == "i":
+                    ignore_case = True
+                elif flag == "n":
+                    show_line_numbers = True
+                else:
+                    print(f"grep: invalid option -- '{flag}'", file=stderr)
+                    return 2
+        elif flag_word == "-":
             print("grep: invalid option -- '-'", file=stderr)
             return 2
-        for flag in flag_word[1:]:
-            if flag == "i":
-                ignore_case = True
-            elif flag == "n":
-                show_line_numbers = True
-            else:
-                print(f"grep: invalid option -- '{flag}'", file=stderr)
-                return 2
+        else:
+            positional.append(flag_word)
         index += 1
 
-    if index >= len(args):
+    if not positional:
         print(USAGE, file=stderr)
         return 2
 
-    pattern = args[index]
-    filenames = args[index + 1 :]
+    pattern = positional[0]
+    filenames = positional[1:]
+    regex: re.Pattern[str] | None = None
+    if extended_regex:
+        flags = re.IGNORECASE if ignore_case else 0
+        try:
+            regex = re.compile(pattern, flags)
+        except re.error as error:
+            print(f"grep: invalid pattern: {error}", file=stderr)
+            return 2
+
     matched = False
     failed = False
 
@@ -102,6 +135,8 @@ def cmd_grep(
             pattern,
             ignore_case,
             show_line_numbers,
+            regex,
+            show_groups,
             None,
             False,
             stdout,
@@ -121,6 +156,8 @@ def cmd_grep(
                     pattern,
                     ignore_case,
                     show_line_numbers,
+                    regex,
+                    show_groups,
                     filename,
                     multiple_files,
                     stdout,
