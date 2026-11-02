@@ -23,3 +23,6 @@ def register(name: str) -> Callable[[Command], Command]:
 from shell.builtins import files as _files
 from shell.builtins import perms as _perms
 from shell.builtins import search as _search
+from sim.commands import cmd_sched
+
+REGISTRY["sched"] = cmd_sched
