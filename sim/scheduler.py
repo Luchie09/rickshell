@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from sim.pcb import TERMINATED, Process
+from sim.pcb import NEW, READY, RUNNING, TERMINATED, Process
 from sim.metrics import Segment
 
 
@@ -72,3 +72,82 @@ def priority(processes: list[Process]) -> list[Segment]:
         processes,
         lambda process, index: (process.priority, process.arrival, index),
     )
+
+
+def round_robin(
+    processes: list[Process],
+    quantum: int = 4,
+    events: list[str] | None = None,
+) -> list[Segment]:
+    """Run Round-Robin scheduling with arrivals admitted before requeueing."""
+    if quantum < 1:
+        raise ValueError("quantum must be at least 1")
+
+    for process in processes:
+        process.reset()
+
+    segments: list[Segment] = []
+    time = 0
+    queue: list[Process] = []
+    running: Process | None = None
+    slice_used = 0
+    admitted: set[str] = set()
+
+    def admit_arrivals(at_time: int) -> None:
+        for process in processes:
+            if (
+                process.state != TERMINATED
+                and process.pid not in admitted
+                and process.arrival == at_time
+            ):
+                if events is not None:
+                    events.append(
+                        f"t={at_time} {process.pid} {NEW} -> {READY}"
+                    )
+                process.state = READY
+                admitted.add(process.pid)
+                queue.append(process)
+
+    while any(process.state != TERMINATED for process in processes):
+        admit_arrivals(time)
+
+        if running is None and queue:
+            running = queue.pop(0)
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {READY} -> {RUNNING}"
+                )
+            running.state = RUNNING
+            if running.start_time is None:
+                running.start_time = time
+            slice_used = 0
+
+        if running is None:
+            segments.append(("IDLE", time, time + 1))
+            time += 1
+            continue
+
+        running.remaining -= 1
+        slice_used += 1
+        segments.append((running.pid, time, time + 1))
+        time += 1
+
+        # Admit arrivals first so they enter the queue before a preempted process.
+        admit_arrivals(time)
+
+        if running.remaining == 0:
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {RUNNING} -> {TERMINATED}"
+                )
+            running.completion_time = time
+            running.state = TERMINATED
+            running = None
+        elif slice_used == quantum:
+            if events is not None:
+                events.append(f"t={time} {running.pid} {RUNNING} -> {READY}")
+            running.state = READY
+            queue.append(running)
+            running = None
+
+    return segments

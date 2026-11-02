@@ -8,7 +8,7 @@ from sim.gantt import merge_segments, render_gantt
 from sim.loader import LoaderError, load_processes
 from sim.metrics import compute_metrics, format_metrics_table
 from sim.pcb import format_pcb_table
-from sim.scheduler import fcfs, priority, sjn
+from sim.scheduler import fcfs, priority, round_robin, sjn
 
 USAGE = (
     "sched: usage: sched <fcfs|sjn|priority|rr|mlq|mlfq> "
@@ -19,6 +19,7 @@ ALGORITHMS = {
     "fcfs": fcfs,
     "sjn": sjn,
     "priority": priority,
+    "rr": round_robin,
 }
 VALID_ALGORITHMS = {"fcfs", "sjn", "priority", "rr", "mlq", "mlfq"}
 
@@ -100,19 +101,26 @@ def cmd_sched(
         stdout.write("No processes to schedule.\n")
         return 0
 
-    # These options are parsed now and will be used by the RR/MLQ/MLFQ work.
-    # Prompts 9 and 10 add their behavior.
-    _ = quantum, trace
-
     stdout.write("Process table (before run):\n")
     stdout.write(format_pcb_table(processes))
     stdout.write("\n\n")
 
     # Keep original segments for metrics and merge only for chart display.
-    segments = ALGORITHMS[algorithm_name](processes)
+    events: list[str] | None = [] if trace and algorithm_name == "rr" else None
+    if algorithm_name == "rr":
+        segments = round_robin(processes, quantum or 4, events)
+    else:
+        segments = ALGORITHMS[algorithm_name](processes)
     stdout.write("Gantt chart:\n")
     stdout.write(render_gantt(merge_segments(segments)))
-    stdout.write("\n\n")
+    stdout.write("\n")
+
+    if events is not None:
+        stdout.write("Trace:\n")
+        for event in events:
+            stdout.write(event + "\n")
+
+    stdout.write("\n")
 
     rows = compute_metrics(processes, segments)
     stdout.write("Results:\n")

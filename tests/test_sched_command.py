@@ -127,12 +127,12 @@ class SchedulerCommandTests(unittest.TestCase):
         self.assertIn("line 3:", error)
 
         result, output, error = self.run_sched(
-            ["rr", "data/processes/p_basic.txt"]
+            ["mlq", "data/processes/p_basic.txt"]
         )
         self.assertEqual(result, 1)
         self.assertEqual(output, "")
         self.assertEqual(len(error.splitlines()), 1)
-        self.assertIn("sched: rr is not implemented yet", error)
+        self.assertIn("sched: mlq is not implemented yet", error)
 
     def test_options_are_accepted_in_any_order(self) -> None:
         first = self.run_sched(
