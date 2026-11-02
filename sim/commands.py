@@ -8,7 +8,7 @@ from sim.gantt import merge_segments, render_gantt
 from sim.loader import LoaderError, load_processes
 from sim.metrics import compute_metrics, format_metrics_table
 from sim.pcb import format_pcb_table
-from sim.scheduler import fcfs, priority, round_robin, sjn
+from sim.scheduler import fcfs, multilevel_queue, priority, round_robin, sjn
 
 USAGE = (
     "sched: usage: sched <fcfs|sjn|priority|rr|mlq|mlfq> "
@@ -20,6 +20,7 @@ ALGORITHMS = {
     "sjn": sjn,
     "priority": priority,
     "rr": round_robin,
+    "mlq": multilevel_queue,
 }
 VALID_ALGORITHMS = {"fcfs", "sjn", "priority", "rr", "mlq", "mlfq"}
 
@@ -106,9 +107,11 @@ def cmd_sched(
     stdout.write("\n\n")
 
     # Keep original segments for metrics and merge only for chart display.
-    events: list[str] | None = [] if trace and algorithm_name == "rr" else None
-    if algorithm_name == "rr":
-        segments = round_robin(processes, quantum or 4, events)
+    events: list[str] | None = (
+        [] if trace and algorithm_name in {"rr", "mlq"} else None
+    )
+    if algorithm_name in {"rr", "mlq"}:
+        segments = ALGORITHMS[algorithm_name](processes, quantum or 4, events)
     else:
         segments = ALGORITHMS[algorithm_name](processes)
     stdout.write("Gantt chart:\n")

@@ -151,3 +151,113 @@ def round_robin(
             running = None
 
     return segments
+
+
+def multilevel_queue(
+    processes: list[Process],
+    quantum: int = 4,
+    events: list[str] | None = None,
+) -> list[Segment]:
+    """Run Q0 as Round-Robin and Q1 as FCFS, always favoring Q0."""
+    if quantum < 1:
+        raise ValueError("quantum must be at least 1")
+
+    for process in processes:
+        process.reset()
+
+    segments: list[Segment] = []
+    time = 0
+    q0: list[Process] = []
+    q1: list[Process] = []
+    running: Process | None = None
+    slice_used = 0
+    admitted: set[str] = set()
+    q0_pids = {
+        process.pid
+        for process in processes
+        if process.priority in (1, 2)
+    }
+
+    def admit_arrivals(at_time: int) -> None:
+        for process in processes:
+            if (
+                process.state != TERMINATED
+                and process.pid not in admitted
+                and process.arrival == at_time
+            ):
+                if events is not None:
+                    events.append(
+                        f"t={at_time} {process.pid} {NEW} -> {READY}"
+                    )
+                process.state = READY
+                admitted.add(process.pid)
+                if process.pid in q0_pids:
+                    q0.append(process)
+                else:
+                    q1.append(process)
+
+    # Q0 receives Round-Robin service; Q1 processes run FCFS without a quantum.
+    while any(process.state != TERMINATED for process in processes):
+        admit_arrivals(time)
+
+        # A newly ready Q0 process interrupts a running Q1 process immediately.
+        if (
+            running is not None
+            and running.pid not in q0_pids
+            and q0
+        ):
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {RUNNING} -> {READY}"
+                )
+            running.state = READY
+            # Resume the interrupted FCFS process before later Q1 arrivals.
+            q1.insert(0, running)
+            running = None
+
+        if running is None:
+            if q0:
+                running = q0.pop(0)
+                slice_used = 0
+            elif q1:
+                running = q1.pop(0)
+
+            if running is not None:
+                if events is not None:
+                    events.append(
+                        f"t={time} {running.pid} {READY} -> {RUNNING}"
+                    )
+                running.state = RUNNING
+                if running.start_time is None:
+                    running.start_time = time
+
+        if running is None:
+            segments.append(("IDLE", time, time + 1))
+            time += 1
+            continue
+
+        running.remaining -= 1
+        if running.pid in q0_pids:
+            slice_used += 1
+        segments.append((running.pid, time, time + 1))
+        time += 1
+
+        # Admit first so same-time arrivals join their queue before any requeue.
+        admit_arrivals(time)
+
+        if running.remaining == 0:
+            if events is not None:
+                events.append(
+                    f"t={time} {running.pid} {RUNNING} -> {TERMINATED}"
+                )
+            running.completion_time = time
+            running.state = TERMINATED
+            running = None
+        elif running.pid in q0_pids and slice_used == quantum:
+            if events is not None:
+                events.append(f"t={time} {running.pid} {RUNNING} -> {READY}")
+            running.state = READY
+            q0.append(running)
+            running = None
+
+    return segments
