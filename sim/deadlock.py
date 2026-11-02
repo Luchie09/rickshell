@@ -74,3 +74,34 @@ def safety_check(
         if not finished[process]
     ]
     return all(finished), sequence, stuck
+
+
+def detect(state: ResourceState) -> list[str]:
+    """Return processes that cannot finish when Need is their request."""
+    work = state.available.copy()
+    finished = [False] * state.n
+    needed = state.need()
+
+    while not all(finished):
+        made_progress = False
+        # Detection uses Need as the outstanding request and releases each
+        # completed process's allocation, just like the safety-check loop.
+        for process in range(state.n):
+            if finished[process]:
+                continue
+            if all(
+                needed[process][resource] <= work[resource]
+                for resource in range(state.m)
+            ):
+                for resource in range(state.m):
+                    work[resource] += state.allocation[process][resource]
+                finished[process] = True
+                made_progress = True
+        if not made_progress:
+            break
+
+    return [
+        state.pid(process)
+        for process in range(state.n)
+        if not finished[process]
+    ]

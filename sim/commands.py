@@ -4,8 +4,9 @@ import os
 from typing import TextIO
 
 from shell.context import ShellContext
+from sim.deadlock import detect, safety_check
 from sim.gantt import merge_segments, render_gantt
-from sim.loader import LoaderError, load_processes
+from sim.loader import LoaderError, load_processes, load_resources
 from sim.metrics import compute_metrics, format_metrics_table
 from sim.pcb import format_pcb_table
 from sim.scheduler import (
@@ -138,4 +139,47 @@ def cmd_sched(
     stdout.write("Process table (after run):\n")
     stdout.write(format_pcb_table(processes))
     stdout.write("\n")
+    return 0
+
+
+def cmd_deadlock(
+    args: list[str],
+    stdin: TextIO,
+    stdout: TextIO,
+    stderr: TextIO,
+    ctx: ShellContext,
+) -> int:
+    """Detect deadlocked processes or check a resource state for safety."""
+    usage = "usage: deadlock <detect|banker> <file>"
+    if len(args) != 2 or args[0] not in {"detect", "banker"}:
+        stderr.write(usage + "\n")
+        return 2
+
+    subcommand, file_name = args
+    file_path = os.path.join(ctx.cwd, file_name)
+    try:
+        state = load_resources(file_path)
+    except (LoaderError, OSError) as error:
+        stderr.write(f"deadlock: {error}\n")
+        return 1
+
+    if subcommand == "detect":
+        deadlocked = detect(state)
+        if deadlocked:
+            stdout.write(
+                "Deadlock detected. Deadlocked processes: "
+                + ", ".join(deadlocked)
+                + "\n"
+            )
+        else:
+            stdout.write("No deadlock found.\n")
+        return 0
+
+    safe, sequence, stuck = safety_check(state)
+    if safe and not sequence:
+        stdout.write("SAFE state. Safe sequence: (none, no processes)\n")
+    elif safe:
+        stdout.write("SAFE state. Safe sequence: " + " -> ".join(sequence) + "\n")
+    else:
+        stdout.write("UNSAFE state. Stuck processes: " + ", ".join(stuck) + "\n")
     return 0
