@@ -91,7 +91,7 @@ def cmd_rick(
     stderr: TextIO,
     ctx: ShellContext,
 ) -> int:
-    """Play the Rick dance or toggle its automatic triggers."""
+    """Stream the live Rick animation or toggle its automatic triggers."""
     if args == ["on"]:
         ctx.easter_eggs = True
         return 0

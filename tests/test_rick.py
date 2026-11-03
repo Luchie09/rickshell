@@ -1,4 +1,4 @@
-"""Tests for TTY-only live and saved Rick animations."""
+"""Tests for TTY-only live Rick animation."""
 
 import io
 import os
@@ -41,11 +41,6 @@ class RickTests(unittest.TestCase):
         response.__enter__.return_value = response
         response.__exit__.return_value = False
         return response
-
-    def test_frame_loading(self) -> None:
-        frames = rick.load_frames()
-        self.assertEqual(len(frames), 4)
-        self.assertIn("o", frames[0])
 
     def test_live_rick_streams_to_tty_and_restores_screen(self) -> None:
         output = RecordingTTYStringIO()
@@ -97,8 +92,11 @@ class RickTests(unittest.TestCase):
 
     def test_screen_restored_when_stream_is_interrupted(self) -> None:
         output = TTYStringIO()
-        response = self.response([])
-        response.read.side_effect = KeyboardInterrupt()
+        response = self.response([b"\x1b[Hframe\x1b[H"])
+        response.read.side_effect = [
+            b"\x1b[Hframe\x1b[H",
+            KeyboardInterrupt(),
+        ]
         with patch("urllib.request.urlopen", return_value=response):
             result = cmd_rick([], io.StringIO(), output, io.StringIO(), self.context)
         self.assertEqual(result, 0)
@@ -106,38 +104,34 @@ class RickTests(unittest.TestCase):
         self.assertIn(rick.ENTER_ANIMATION, output.getvalue())
         self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
 
-    def test_network_errors_and_empty_stream_fall_back_to_saved_dancer(self) -> None:
+    def test_stream_failures_leave_the_screen_untouched(self) -> None:
         for error in (URLError("offline"), TimeoutError("timed out")):
             with self.subTest(error=error):
                 output = TTYStringIO()
-                with (
-                    patch("urllib.request.urlopen", side_effect=error),
-                    patch("shell.easter.rick.time.monotonic", side_effect=[0, 3]),
-                    patch(
-                        "shell.easter.rick.time.sleep",
-                        side_effect=[None, KeyboardInterrupt()],
-                    ),
-                ):
-                    rick.play_rick(output)
-                self.assertTrue(
-                    output.getvalue().startswith("Press Ctrl+C to stop\n")
+                with patch("urllib.request.urlopen", side_effect=error):
+                    result = cmd_rick(
+                        [], io.StringIO(), output, io.StringIO(), self.context
+                    )
+                self.assertEqual(result, 0)
+                self.assertEqual(output.getvalue(), "")
+
+        for response in (self.response([b""]), self.response([b"bad stream"])):
+            output = TTYStringIO()
+            with patch("urllib.request.urlopen", return_value=response):
+                result = cmd_rick(
+                    [], io.StringIO(), output, io.StringIO(), self.context
                 )
-                self.assertIn(rick.ENTER_ANIMATION, output.getvalue())
-                self.assertIn("\x1b[H", output.getvalue())
-                self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
+            self.assertEqual(result, 0)
+            self.assertEqual(output.getvalue(), "")
 
         output = TTYStringIO()
-        response = self.response([b""])
-        with (
-            patch("urllib.request.urlopen", return_value=response),
-            patch("shell.easter.rick.time.monotonic", side_effect=[0, 3]),
-            patch(
-                "shell.easter.rick.time.sleep",
-                side_effect=[None, KeyboardInterrupt()],
-            ),
-        ):
-            rick.play_rick(output)
-        self.assertIn("\x1b[H", output.getvalue())
+        bad_response = self.response([b"\x1b[Hframe\x1b[H"], status=500)
+        with patch("urllib.request.urlopen", return_value=bad_response):
+            result = cmd_rick(
+                [], io.StringIO(), output, io.StringIO(), self.context
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual(output.getvalue(), "")
 
     def test_non_tty_does_not_write_or_open_network(self) -> None:
         output = io.StringIO()
@@ -145,28 +139,6 @@ class RickTests(unittest.TestCase):
             rick.play_rick(output)
         self.assertEqual(output.getvalue(), "")
         urlopen.assert_not_called()
-
-    def test_silent_fallback_runs_until_ctrl_c(self) -> None:
-        output = TTYStringIO()
-        frame_calls: list[int] = []
-        original_print_frame = rick._print_frame
-
-        def stop_after_few_frames(stream, frames, frame_number):
-            frame_calls.append(frame_number)
-            original_print_frame(stream, frames, frame_number)
-            if len(frame_calls) == 3:
-                raise KeyboardInterrupt
-
-        with (
-            patch("urllib.request.urlopen", side_effect=URLError("offline")),
-            patch("shell.easter.rick._print_frame", side_effect=stop_after_few_frames),
-            patch("shell.easter.rick.time.sleep"),
-        ):
-            result = cmd_rick([], io.StringIO(), output, io.StringIO(), self.context)
-
-        self.assertEqual(result, 0)
-        self.assertEqual(len(frame_calls), 3)
-        self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
 
     def test_unknown_command_trigger_streams_until_interrupted(self) -> None:
         unknown_stdout = TTYStringIO()
@@ -194,38 +166,51 @@ class RickTests(unittest.TestCase):
         self.assertEqual(self.context.last_exit_code, 127)
         urlopen.assert_called_once_with(unittest.mock.ANY, timeout=3)
 
-    def test_tenth_success_trigger_is_saved_and_bounded(self) -> None:
+    def test_unknown_command_trigger_does_nothing_when_offline(self) -> None:
+        output = TTYStringIO()
+        stderr = io.StringIO()
+        with (
+            patch.object(sys, "stdin", io.StringIO("unknown-command\n")),
+            patch.object(sys, "stdout", output),
+            patch.object(sys.stdout, "isatty", return_value=True),
+            patch.object(sys, "stderr", stderr),
+            patch("shell.repl.time.sleep"),
+            patch("urllib.request.urlopen", side_effect=URLError("offline")),
+        ):
+            run(self.context)
+        self.assertNotIn("\x1b[", output.getvalue())
+        self.assertNotIn("Press Ctrl+C to stop", output.getvalue())
+        self.assertIn("unknown-command: command not found", stderr.getvalue())
+        self.assertEqual(self.context.last_exit_code, 127)
+
+    def test_tenth_success_trigger_streams_for_two_seconds(self) -> None:
         self.context = ShellContext()
         success_stdout = TTYStringIO()
-        dance = patch("shell.easter.rick._silent_timed_dance")
+        response = self.response(
+            [
+                b"\x1b[Hfirst frame\x1b[H",
+                b"second frame\x1b[H",
+                b"too late\x1b[H",
+            ]
+        )
         with (
             patch.object(sys, "stdin", io.StringIO("true\n" * 10)),
             patch.object(sys, "stdout", success_stdout),
             patch.object(sys.stdout, "isatty", return_value=True),
             patch.object(sys, "stderr", io.StringIO()),
-            patch("urllib.request.urlopen") as urlopen,
-            dance as saved_dance,
+            patch("urllib.request.urlopen", return_value=response) as urlopen,
+            patch(
+                "shell.easter.rick.time.monotonic",
+                side_effect=[0.0, 0.0, 0.1, 1.0, 1.1, 2.0],
+            ),
         ):
             run(self.context)
         self.assertEqual(self.context.last_exit_code, 0)
-        saved_dance.assert_called_once()
-        self.assertEqual(saved_dance.call_args.args[2], 2.0)
-        urlopen.assert_not_called()
-
-    def test_timed_saved_dance_stops_at_two_seconds_without_network(self) -> None:
-        output = TTYStringIO()
-        with (
-            patch(
-                "shell.easter.rick.time.monotonic",
-                side_effect=[0.0, 0.0, 2.0, 2.0],
-            ),
-            patch("shell.easter.rick.time.sleep"),
-            patch("urllib.request.urlopen") as urlopen,
-        ):
-            rick.play_silent(output, duration=2.0)
-        self.assertIn("\x1b[H", output.getvalue())
-        self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
-        urlopen.assert_not_called()
+        self.assertIn("first frame", success_stdout.getvalue())
+        self.assertIn("second frame", success_stdout.getvalue())
+        self.assertNotIn("too late", success_stdout.getvalue())
+        self.assertEqual(response.read.call_count, 2)
+        urlopen.assert_called_once_with(unittest.mock.ANY, timeout=1)
 
     def test_automatic_trigger_skips_network_when_disabled_or_non_tty(self) -> None:
         self.context.easter_eggs = False
@@ -308,26 +293,6 @@ class RickTests(unittest.TestCase):
         self.assertTrue(self.context.easter_eggs)
         self.assertEqual(stdout.getvalue(), "")
         self.assertEqual(stderr.getvalue(), "")
-
-    def test_missing_local_frames_and_bad_response_do_not_raise(self) -> None:
-        output = TTYStringIO()
-        with patch("urllib.request.urlopen", side_effect=URLError("offline")):
-            rick.play_rick(output, "missing-rick-frames.txt")
-        self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
-
-        output = TTYStringIO()
-        response = self.response([b"bad"])
-        response.status = 500
-        with (
-            patch("urllib.request.urlopen", return_value=response),
-            patch(
-                "shell.easter.rick.time.sleep",
-                side_effect=KeyboardInterrupt(),
-            ),
-        ):
-            rick.play_rick(output)
-        self.assertTrue(output.getvalue().endswith(rick.RESTORE_TERMINAL))
-
 
 if __name__ == "__main__":
     unittest.main()
