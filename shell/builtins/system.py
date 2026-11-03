@@ -81,3 +81,28 @@ def cmd_clear(
         stdout.flush()
     # Non-terminals receive no output so redirects and pipes stay clean.
     return 0
+
+
+@register("rick")
+def cmd_rick(
+    args: list[str],
+    stdin: TextIO,
+    stdout: TextIO,
+    stderr: TextIO,
+    ctx: ShellContext,
+) -> int:
+    """Play the Rick dance or toggle its automatic triggers."""
+    if args == ["on"]:
+        ctx.easter_eggs = True
+        return 0
+    if args == ["off"]:
+        ctx.easter_eggs = False
+        return 0
+    if args not in ([], ["--live"]):
+        stderr.write("rick: usage: rick [on|off|--live]\n")
+        return 2
+
+    from shell.easter.rick import play_rick
+
+    play_rick(stdout)
+    return 0
