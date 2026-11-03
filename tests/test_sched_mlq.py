@@ -152,7 +152,7 @@ class MultilevelQueueTests(unittest.TestCase):
 
 
 class MultilevelQueueCommandTests(unittest.TestCase):
-    def test_sched_mlq_and_mlfq_not_yet_implemented(self) -> None:
+    def test_sched_command_runs_mlq_with_quantum_and_trace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "input.txt")
             with open(path, "w", encoding="utf-8") as file:

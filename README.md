@@ -73,7 +73,8 @@ Every command is a function with the same signature, `cmd(args, stdin, stdout, s
 |---|---|
 | `pwd` | Print the current directory |
 | `cd [dir]` | Change directory (no argument goes to home) |
-| `ls [-l] [path]` | List entries. `-l` shows permissions, size, modified time, and name |
+| `ls [-l] [-R] [path...]` | List entries. `-l` shows permissions, size, modified time, and name. `-R` lists subdirectories recursively |
+| `dir [-l] [-R] [path...]` | Alias for `ls` |
 | `mkdir dir...` | Create directories |
 | `rmdir dir...` | Remove empty directories |
 | `touch file...` | Create a file or update its modified time |
@@ -83,6 +84,7 @@ Every command is a function with the same signature, `cmd(args, stdin, stdout, s
 | `cat [file...]` | Print files, or standard input when no file is given |
 | `chmod MODE file` | Change permissions using a numeric mode (3 or 4 octal digits) |
 | `echo words...` | Print arguments |
+| `clear` | Clear the terminal screen |
 | `env` | List variables as `NAME=value`, sorted |
 | `grep [-i] [-n] [-E] [--groups] PATTERN [file...]` | Search lines of text |
 | `sched ...` | CPU scheduling simulator |
