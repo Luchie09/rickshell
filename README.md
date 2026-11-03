@@ -2,7 +2,7 @@
 
 A Bash-like command-line shell written in Python 3, with built-in simulators for CPU process scheduling and deadlock handling.
 
-A project requirement in CMPSC 123: Operating System.
+A project requirement in CMPSC 123: Operating Systems.
 
 ## Table of Contents
 
@@ -59,8 +59,7 @@ rickshell/
   data/
     processes/     Sample process files
     resources/     Sample resource files
-  tests/           Unit tests
-  docs/            Report, test cases, and comparison output
+  tests/           Unit tests and test case descriptions
 ```
 
 Every command is a function with the same signature, `cmd(args, stdin, stdout, stderr, ctx) -> exit_code`. Redirection swaps the stream objects before a command runs, and pipes pass one command's output as the next command's input.
@@ -217,7 +216,24 @@ Preemption note: Preempt R1 from P1
 compare <process_file> [--quantum N] [--save <path.md>]
 ```
 
-Runs all six scheduling algorithms on the same file with the same quantum (default 4). The output contains a table of average waiting and turnaround times, a text bar chart for each metric, and the best algorithm per metric. When several algorithms tie, all are listed. `--save` writes the table as Markdown and creates the target folder if needed. The result for `p_basic.txt` is stored in `docs/compare_basic.md`.
+Runs all six scheduling algorithms on the same file with the same quantum (default 4). The output contains a table of average waiting and turnaround times, a text bar chart for each metric, and the best algorithm per metric. When several algorithms tie, all are listed. `--save` writes the table as Markdown and creates the target folder if needed.
+
+```
+rickshell > compare data/processes/p_basic.txt
+Algorithm | Avg waiting | Avg turnaround
+----------|-------------|---------------
+FCFS      |        8.75 |         15.25
+SJN       |        7.75 |         14.25
+Priority  |        7.75 |         14.25
+RR        |       11.75 |         18.25
+MLQ       |        8.75 |         15.25
+MLFQ      |       13.00 |         19.50
+
+Best avg waiting: SJN, Priority
+Best avg turnaround: SJN, Priority
+```
+
+The bar charts are omitted above for brevity.
 
 ## Input File Formats
 
@@ -296,11 +312,14 @@ python -m unittest discover -s tests -t .
 
 The suite covers the tokenizer, redirection, pipes, variables, conditionals, error handling, grep (plain and regular expression), all six schedulers with hand-calculated expected values, deadlock detection, Banker's algorithm, request handling, recovery suggestions, and the compare command. Each simulator is tested with at least three inputs, including an empty or single-process edge case.
 
+The test inputs and their expected results are described in `tests/test_cases.md`.
+
 ## Known Limitations
 
 - `if` statements are single-line and cannot be nested.
 - `chmod` accepts numeric modes only.
 - Only the built-in commands listed above are available. External programs cannot be run.
+- Pipelines run one stage at a time. Each stage finishes before the next begins, so stages do not run concurrently.
 - The comparison samples are small, so their conclusions may not generalize to larger workloads.
 
 ## Rick Shell Animation
