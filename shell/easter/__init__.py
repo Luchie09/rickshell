@@ -1,1 +1,1 @@
-"""Easter egg animations and sounds for Rick Shell."""
+"""Easter egg animations for Rick Shell."""
