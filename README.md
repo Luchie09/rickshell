@@ -350,14 +350,14 @@ The test inputs and their expected results are described in `tests/test_cases.md
 ## Known Limitations
 
 - `if` statements are single-line and cannot be nested.
-- `chmod` accepts numeric modes only. Modes are simulated (Windows has no Unix permission bits) and last for the current session.
+- `chmod` accepts numeric modes only. Modes are simulated and last for the current session.
 - Only the built-in commands listed above are available. External programs cannot be run.
 - Pipelines run one stage at a time. Each stage finishes before the next begins, so stages do not run concurrently.
 - The comparison samples are small, so their conclusions may not generalize to larger workloads.
 
 ## Rick Shell Animation (Easter Egg)
 
-Rick Shell includes an easter egg: the classic "Rickroll" ASCII-art animation, streamed live from [ascii.live](https://ascii.live/rick). It is purely for fun. It never changes a command's output, exit code, or variables, and no required module depends on it.
+Rick Shell includes an easter egg: the classic "Rickroll" ASCII-art animation, streamed live from [ascii.live](https://ascii.live/rick). 
 
 ### Commands
 
@@ -369,7 +369,7 @@ Rick Shell includes an easter egg: the classic "Rickroll" ASCII-art animation, s
 
 ### When it plays
 
-The animation plays automatically in one case only: after an unknown command. The shell prints the normal error (`rickshell: foo: command not found`, exit code 127), waits 2 seconds, and then plays Rick until Ctrl+C. No other command triggers it, including successful commands and other errors.
+The animation triggers only after entering any bad command and can be stop by clicking crtl + c command.
 
 ```
 rickshell > foo
@@ -382,11 +382,3 @@ Press Ctrl+C to stop
 - `shell/easter/rick.py` opens `https://ascii.live/rick` with the standard-library `urllib.request` module. No third-party package is used.
 - The service streams frames as text separated by the "cursor home" terminal code. The shell buffers the stream, splits it into whole frames, and strips any other escape codes.
 - Each frame is shrunk to fit the current terminal window, then drawn on the terminal's alternate screen. On exit or Ctrl+C the original screen and cursor are restored, so earlier output is not lost.
-
-### Safety and offline use
-
-- It plays only in an interactive terminal. Redirected output (`> file`), pipes, and the unit tests never trigger it.
-- If there is no internet connection or the service does not respond within 3 seconds, nothing is shown and the prompt returns normally.
-- Any error during playback is caught, so the animation can never crash the shell.
-- A maximized terminal window gives the best picture.
-- Type `rick off` to run the shell with no network access at all.
