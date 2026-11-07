@@ -1,10 +1,8 @@
 """Build command, pipeline, and command-list structures from tokens."""
 
-import pprint
-import sys
 from dataclasses import dataclass, field
 
-from shell.tokenizer import ShellSyntaxError, Token, tokenize
+from shell.tokenizer import ShellSyntaxError, Token
 
 
 @dataclass
@@ -286,11 +284,3 @@ def parse(tokens: list[Token]) -> CommandList:
             )
 
     return result
-
-
-if __name__ == "__main__":
-    try:
-        parsed = parse(tokenize(" ".join(sys.argv[1:])))
-        pprint.pprint(parsed)
-    except ShellSyntaxError as error:
-        print(error)

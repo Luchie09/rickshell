@@ -38,7 +38,8 @@ def build_prompt(ctx: ShellContext) -> str:
 def run(ctx: ShellContext) -> None:
     """Run the interactive shell until it receives an exit request or EOF."""
     global _ansi_initialized
-    successful_commands = 0
+    # An empty os.system call switches the Windows console into ANSI mode,
+    # which ls colors, clear, and the Rick animation rely on.
     if os.name == "nt" and not _ansi_initialized:
         os.system("")
         _ansi_initialized = True
@@ -65,17 +66,19 @@ def run(ctx: ShellContext) -> None:
                 sys.stdout,
                 sys.stderr,
             )
-            if exit_code == 0:
-                successful_commands += 1
-            if ctx.easter_eggs and _rick.is_terminal(sys.stdout):
+            # Unknown command (127) plays Rick until Ctrl+C. Terminal only,
+            # so redirected or piped output is never affected.
+            if (
+                exit_code == 127
+                and ctx.easter_eggs
+                and _rick.is_terminal(sys.stdout)
+            ):
                 try:
-                    if exit_code == 127:
-                        time.sleep(2)
-                        _rick.play_rick(sys.stdout)
-                    elif exit_code == 0 and successful_commands % 10 == 0:
-                        _rick.play_silent(sys.stdout, duration=2.0)
+                    time.sleep(2)
+                    _rick.play_rick(sys.stdout)
                 except (Exception, KeyboardInterrupt):
                     pass
+        # Last line of defence: nothing typed at the prompt may end the shell.
         except ShellSyntaxError as error:
             ctx.last_exit_code = 2
             print(f"rickshell: syntax error: {error}", file=sys.stderr)

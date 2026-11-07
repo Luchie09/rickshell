@@ -1,0 +1,17 @@
+# Unsafe by Banker's algorithm, but not deadlocked: the current requests
+# can all be satisfied in the order P0 -> P1 -> P2.
+3 2
+# Allocation
+1 0
+0 1
+1 1
+# Maximum claims
+2 2
+2 2
+2 2
+# Available
+0 0
+# Request (optional, used by deadlock detect)
+0 0
+1 0
+0 0

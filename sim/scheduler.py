@@ -1,4 +1,9 @@
-"""Non-preemptive scheduling algorithms."""
+"""The six CPU scheduling algorithms.
+
+FCFS, SJN, and Priority jump from event to event. Round-Robin, MLQ, and MLFQ
+advance one time unit per loop so preemption can happen at any tick. Every
+function returns a list of (label, start, end) segments for the Gantt chart.
+"""
 
 from collections.abc import Callable
 
@@ -50,6 +55,7 @@ def _run_nonpreemptive(
     return segments
 
 
+# Each key ends with the input index, so remaining ties keep file order.
 def fcfs(processes: list[Process]) -> list[Segment]:
     """Run first-come, first-served scheduling."""
     return _run_nonpreemptive(
@@ -354,9 +360,13 @@ def multilevel_feedback_queue(
             running_level < 2
             and slice_used == quanta[running_level]
         ):
+            # Used its whole quantum, so it drops one level.
+            running_level += 1
             if events is not None:
                 events.append(f"t={time} {running.pid} {RUNNING} -> {READY}")
-            running_level += 1
+                events.append(
+                    f"t={time} {running.pid} demoted to Level {running_level}"
+                )
             running.state = READY
             queues[running_level].append(running)
             running = None

@@ -8,17 +8,18 @@ A project requirement in CMPSC 123: Operating Systems.
 
 1. [Overview](#overview)
 2. [Requirements](#requirements)
-3. [Getting Started](#getting-started)
-4. [Project Structure](#project-structure)
-5. [Shell Reference](#shell-reference)
-6. [Process Scheduling Simulator](#process-scheduling-simulator)
-7. [Deadlock Simulator](#deadlock-simulator)
-8. [Algorithm Comparison](#algorithm-comparison)
-9. [Input File Formats](#input-file-formats)
-10. [Algorithm Conventions](#algorithm-conventions)
-11. [Testing](#testing)
-12. [Known Limitations](#known-limitations)
-13. [Rick Shell Animation](#rick-shell-animation)
+3. [Libraries Used](#libraries-used)
+4. [Getting Started](#getting-started)
+5. [Project Structure](#project-structure)
+6. [Shell Reference](#shell-reference)
+7. [Process Scheduling Simulator](#process-scheduling-simulator)
+8. [Deadlock Simulator](#deadlock-simulator)
+9. [Algorithm Comparison](#algorithm-comparison)
+10. [Input File Formats](#input-file-formats)
+11. [Algorithm Conventions](#algorithm-conventions)
+12. [Testing](#testing)
+13. [Known Limitations](#known-limitations)
+14. [Rick Shell Animation (Easter Egg)](#rick-shell-animation-easter-egg)
 
 ## Overview
 
@@ -35,8 +36,28 @@ All algorithms are implemented from scratch. No scheduling or deadlock library i
 
 ## Requirements
 
-- Python 3.x
+- Python 3.10 or newer
 - Standard library only. No packages to install.
+- An internet connection only for the optional Rick animation
+
+## Libraries Used
+
+Every module comes from the Python standard library. None of them implements a scheduling or deadlock algorithm; those are all written by hand in `sim/`.
+
+| Module | Used for | Where |
+|---|---|---|
+| `os`, `shutil` | Paths, directory listing, copying, moving, removing files, terminal size | `shell/builtins/files.py`, `shell/repl.py` |
+| `errno` | Turning OS errors into short messages such as `No such file or directory` | `shell/builtins/files.py` |
+| `re` | `grep -E` pattern matching, `$NAME` expansion, `NAME=value` detection, `chmod` mode check | `shell/builtins/search.py`, `shell/executor.py`, `shell/builtins/perms.py` |
+| `io` | In-memory `StringIO` buffers that carry text between pipeline stages | `shell/executor.py` |
+| `sys` | Standard input, output, and error for the prompt loop | `shell/repl.py` |
+| `dataclasses` | Tokens, parsed commands, the PCB, and the resource state | `shell/tokenizer.py`, `shell/parser.py`, `sim/pcb.py`, `sim/deadlock.py` |
+| `copy` | Fresh copies of the process list for each algorithm in `compare` | `compare/compare.py` |
+| `datetime`, `getpass` | Modified time and owner name in `ls -l` | `shell/builtins/perms.py` |
+| `typing`, `collections.abc` | Type hints only | Throughout |
+| `urllib.request` | Streaming the Rick animation from `ascii.live` | `shell/easter/rick.py` |
+| `time` | Animation timing and the pause before it starts | `shell/easter/rick.py`, `shell/repl.py` |
+| `unittest` | The test suite | `tests/` |
 
 ## Getting Started
 
@@ -54,6 +75,7 @@ The prompt shows the current directory, for example `rickshell >` or `rickshell\
 rickshell/
   main.py          Entry point
   shell/           Tokenizer, parser, executor, REPL, and built-in commands
+    easter/        The Rick animation (easter egg)
   sim/             PCB, loader, schedulers, metrics, Gantt chart, deadlock simulator
   compare/         The compare command
   data/
@@ -89,7 +111,8 @@ Every command is a function with the same signature, `cmd(args, stdin, stdout, s
 | `sched ...` | CPU scheduling simulator |
 | `deadlock ...` | Deadlock simulator |
 | `compare ...` | Scheduling algorithm comparison |
-| `rick [on\|off]` | Terminal animation (see [Rick Shell Animation](#rick-shell-animation)) |
+| `rick [on\|off]` | Terminal animation (see [Rick Shell Animation](#rick-shell-animation-easter-egg)) |
+| `true`, `false` | Return exit code 0 or 1, useful for testing `&&`, `\|\|`, and `if` |
 | `help` | List all commands |
 | `exit` | Quit the shell |
 
@@ -197,7 +220,7 @@ deadlock banker <file> --request P1 1 0 2
 
 | Command | Description |
 |---|---|
-| `detect` | List the deadlocked processes, or report that none were found. When a deadlock exists, also print a recovery suggestion and a preemption note |
+| `detect` | List the deadlocked processes, or report that none were found. Uses the file's Request matrix when present, otherwise Need. When a deadlock exists, also print a recovery suggestion and a preemption note |
 | `banker` | Report whether the state is safe and print the safe sequence, for example `P1 -> P3 -> P4 -> P0 -> P2`. An unsafe state lists the stuck processes |
 | `banker --request` | Test a resource request for a process. The result is granted, exceeds the maximum claim, must wait, or is denied because the state would be unsafe |
 
@@ -251,7 +274,7 @@ P4 3 5 2
 
 ### Resource File
 
-The first line gives the number of processes `n` and resources `m`. It is followed by the Allocation matrix (`n` rows), the Max matrix (`n` rows), and the Available vector (one row). Processes are named P0, P1, and so on.
+The first line gives the number of processes `n` and resources `m`. It is followed by the Allocation matrix (`n` rows), the Max matrix (`n` rows), and the Available vector (one row). An optional Request matrix (`n` rows) may follow Available; only `deadlock detect` uses it. Processes are named P0, P1, and so on.
 
 ```
 # n m
@@ -272,12 +295,22 @@ The first line gives the number of processes `n` and resources `m`. It is follow
 3 3 2
 ```
 
+With a Request matrix (`data/resources/detect_request.txt`), the state is unsafe for Banker's algorithm but not deadlocked:
+
+```
+rickshell > deadlock banker data/resources/detect_request.txt
+UNSAFE state. Stuck processes: P0, P1, P2
+rickshell > deadlock detect data/resources/detect_request.txt
+Using the Request matrix from the file.
+No deadlock found.
+```
+
 ### Sample Data
 
 | Folder | Files |
 |---|---|
 | `data/processes/` | `p_basic`, `p_single`, `p_empty`, `p_idle_gap`, `p_ties`, `p_bad_line` |
-| `data/resources/` | `safe`, `unsafe`, `single`, `empty`, `bad_dims`, `deadlock_chain` |
+| `data/resources/` | `safe`, `unsafe`, `single`, `empty`, `bad_dims`, `deadlock_chain`, `detect_request` |
 
 ## Algorithm Conventions
 
@@ -285,9 +318,9 @@ The first line gives the number of processes `n` and resources `m`. It is follow
 
 | Algorithm | Rules |
 |---|---|
-| FCFS | Run in order of arrival. Ties by PID |
-| SJN | Non-preemptive. Pick the arrived process with the shortest burst. Ties by arrival, then PID |
-| Priority | Non-preemptive. A lower number means higher priority. Ties by arrival, then PID |
+| FCFS | Run in order of arrival. Ties by input order |
+| SJN | Non-preemptive. Pick the arrived process with the shortest burst. Ties by arrival, then input order |
+| Priority | Non-preemptive. A lower number means higher priority. Ties by arrival, then input order |
 | Round-Robin | A process runs for the quantum or its remaining time, then returns to the back of the queue. If an arrival and a requeue occur at the same moment, the arrival is queued first |
 | Multilevel Queue | Priority 1 or 2 goes to Queue 0 (Round-Robin), all others to Queue 1 (FCFS). Queue 0 is always served first and preempts Queue 1, whose process returns to the head of its queue. Processes never change queues |
 | Multilevel Feedback Queue | Three levels with quanta 2, 4, and FCFS. New processes start at Level 0. Using a full quantum demotes a process one level. An arrival at a higher level preempts a lower one, which goes to the back of its own queue |
@@ -299,7 +332,7 @@ Turnaround time is Completion - Arrival. Waiting time is Turnaround - Burst. Ave
 ### Deadlock
 
 - **Need matrix:** Need = Max - Allocation.
-- **Detection:** Start with Work = Available. Repeatedly finish any process whose Need fits in Work, adding its Allocation back to Work. Processes that can never finish are deadlocked. Need is treated as each process's potential request.
+- **Detection:** Start with Work = Available. Repeatedly finish any process whose Need fits in Work, adding its Allocation back to Work. Processes that can never finish are deadlocked. The Request matrix is used when the file has one. Otherwise Need is treated as each process's potential request, which makes detection give the same answer as the safety check.
 - **Safety check:** The same loop. If every process finishes, the state is safe and the finishing order is the safe sequence.
 - **Resource request:** Reject if the request exceeds Need. Wait if it exceeds Available. Otherwise allocate on a copy, run the safety check, and grant only if the result is safe.
 - **Recovery suggestion:** Repeatedly suggest terminating the deadlocked process that holds the most resources (ties: lowest PID), release its resources, and run detection again until no deadlock remains. This is a heuristic and is not guaranteed to be optimal.
@@ -317,24 +350,43 @@ The test inputs and their expected results are described in `tests/test_cases.md
 ## Known Limitations
 
 - `if` statements are single-line and cannot be nested.
-- `chmod` accepts numeric modes only.
+- `chmod` accepts numeric modes only. Modes are simulated (Windows has no Unix permission bits) and last for the current session.
 - Only the built-in commands listed above are available. External programs cannot be run.
 - Pipelines run one stage at a time. Each stage finishes before the next begins, so stages do not run concurrently.
 - The comparison samples are small, so their conclusions may not generalize to larger workloads.
 
-## Rick Shell Animation
+## Rick Shell Animation (Easter Egg)
 
-Rick Shell can play an ASCII animation streamed from `ascii.live/rick`. It never changes a command's output, exit code, or variables.
+Rick Shell includes an easter egg: the classic "Rickroll" ASCII-art animation, streamed live from [ascii.live](https://ascii.live/rick). It is purely for fun. It never changes a command's output, exit code, or variables, and no required module depends on it.
+
+### Commands
 
 | Command | Description |
 |---|---|
-| `rick` | Play the animation until Ctrl+C is pressed |
-| `rick off` | Disable the automatic animations |
-| `rick on` | Enable the automatic animations (default) |
+| `rick` | Play the animation now, until Ctrl+C is pressed |
+| `rick off` | Turn off the animation after unknown commands |
+| `rick on` | Turn on the animation after unknown commands (default) |
 
-While enabled, an unknown command plays the animation after its error message, until Ctrl+C. Every 10th successful command plays it for 2 seconds.
+### When it plays
 
-- The animation requires an internet connection. If the service is unreachable, nothing is displayed and the shell continues normally.
-- It plays only in an interactive terminal. Redirected or piped output is never affected.
-- It scales to the terminal size. A maximized window gives the best result.
-- It uses the standard-library `urllib` module. Type `rick off` to run the shell without network access.
+The animation plays automatically in one case only: after an unknown command. The shell prints the normal error (`rickshell: foo: command not found`, exit code 127), waits 2 seconds, and then plays Rick until Ctrl+C. No other command triggers it, including successful commands and other errors.
+
+```
+rickshell > foo
+rickshell: foo: command not found
+Press Ctrl+C to stop
+```
+
+### How it works
+
+- `shell/easter/rick.py` opens `https://ascii.live/rick` with the standard-library `urllib.request` module. No third-party package is used.
+- The service streams frames as text separated by the "cursor home" terminal code. The shell buffers the stream, splits it into whole frames, and strips any other escape codes.
+- Each frame is shrunk to fit the current terminal window, then drawn on the terminal's alternate screen. On exit or Ctrl+C the original screen and cursor are restored, so earlier output is not lost.
+
+### Safety and offline use
+
+- It plays only in an interactive terminal. Redirected output (`> file`), pipes, and the unit tests never trigger it.
+- If there is no internet connection or the service does not respond within 3 seconds, nothing is shown and the prompt returns normally.
+- Any error during playback is caught, so the animation can never crash the shell.
+- A maximized terminal window gives the best picture.
+- Type `rick off` to run the shell with no network access at all.

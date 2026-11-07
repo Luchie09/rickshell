@@ -30,6 +30,7 @@ def _expand(value: str, ctx: ShellContext) -> str:
 
 
 def _word_value(token: Token, ctx: ShellContext) -> str:
+    # Single-quoted words are marked expand=False by the tokenizer.
     if token.expand:
         return _expand(token.value, ctx)
     return token.value
@@ -53,6 +54,8 @@ def _run_command(
     redirect_failed = False
 
     try:
+        # Apply redirects left to right, like Bash: "2>&1" points stderr at
+        # whatever stdout is at that moment, so its position matters.
         for operator, target_token in command.redirects:
             if operator == "2>&1":
                 current_stderr = current_stdout
@@ -86,6 +89,7 @@ def _run_command(
                 current_stdout = redirected_file
 
         if not redirect_failed and words:
+            # NAME=value on its own is an assignment; otherwise look up a command.
             assignment = (
                 ASSIGNMENT_PATTERN.fullmatch(words[0])
                 if len(words) == 1
@@ -179,6 +183,7 @@ def execute(
 ) -> int:
     """Run eligible pipelines and update the last exit code after each one."""
     for connector, pipeline in command_list.items:
+        # && and || only look at the exit code of whatever ran last.
         should_run = (
             connector is None
             or connector == ";"

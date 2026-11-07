@@ -183,34 +183,22 @@ class RickTests(unittest.TestCase):
         self.assertIn("unknown-command: command not found", stderr.getvalue())
         self.assertEqual(self.context.last_exit_code, 127)
 
-    def test_tenth_success_trigger_streams_for_two_seconds(self) -> None:
+    def test_successful_commands_never_trigger_animation(self) -> None:
+        # Only an unknown command plays Rick; ten successes in a row do not.
         self.context = ShellContext()
         success_stdout = TTYStringIO()
-        response = self.response(
-            [
-                b"\x1b[Hfirst frame\x1b[H",
-                b"second frame\x1b[H",
-                b"too late\x1b[H",
-            ]
-        )
         with (
             patch.object(sys, "stdin", io.StringIO("true\n" * 10)),
             patch.object(sys, "stdout", success_stdout),
             patch.object(sys.stdout, "isatty", return_value=True),
             patch.object(sys, "stderr", io.StringIO()),
-            patch("urllib.request.urlopen", return_value=response) as urlopen,
-            patch(
-                "shell.easter.rick.time.monotonic",
-                side_effect=[0.0, 0.0, 0.1, 1.0, 1.1, 2.0],
-            ),
+            patch("shell.repl._rick.play_rick") as live_dance,
+            patch("urllib.request.urlopen") as urlopen,
         ):
             run(self.context)
         self.assertEqual(self.context.last_exit_code, 0)
-        self.assertIn("first frame", success_stdout.getvalue())
-        self.assertIn("second frame", success_stdout.getvalue())
-        self.assertNotIn("too late", success_stdout.getvalue())
-        self.assertEqual(response.read.call_count, 2)
-        urlopen.assert_called_once_with(unittest.mock.ANY, timeout=1)
+        live_dance.assert_not_called()
+        urlopen.assert_not_called()
 
     def test_automatic_trigger_skips_network_when_disabled_or_non_tty(self) -> None:
         self.context.easter_eggs = False
@@ -220,12 +208,10 @@ class RickTests(unittest.TestCase):
             patch.object(sys, "stdout", disabled_stdout),
             patch.object(sys, "stderr", io.StringIO()),
             patch("shell.repl._rick.play_rick") as live_dance,
-            patch("shell.repl._rick.play_silent") as silent_dance,
             patch("urllib.request.urlopen") as urlopen,
         ):
             run(self.context)
         live_dance.assert_not_called()
-        silent_dance.assert_not_called()
         urlopen.assert_not_called()
 
         self.context = ShellContext()
@@ -236,11 +222,9 @@ class RickTests(unittest.TestCase):
             patch.object(sys, "stdout", success_stdout),
             patch.object(sys.stdout, "isatty", return_value=True),
             patch.object(sys, "stderr", io.StringIO()),
-            patch("shell.repl._rick.play_silent") as silent_dance,
             patch("urllib.request.urlopen") as urlopen,
         ):
             run(self.context)
-        silent_dance.assert_not_called()
         urlopen.assert_not_called()
 
         non_tty_context = ShellContext()

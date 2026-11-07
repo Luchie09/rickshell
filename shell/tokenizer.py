@@ -39,6 +39,7 @@ def tokenize(line: str) -> list[Token]:
     while index < len(line):
         char = line[index]
 
+        # Inside quotes everything is literal until the matching quote.
         if quote is not None:
             if char == quote:
                 quote = None
@@ -78,6 +79,7 @@ def tokenize(line: str) -> list[Token]:
             index += 2
             continue
 
+        # The remaining operators, longest first so ">>" is not read as ">" ">".
         operator = next(
             (candidate for candidate in OPERATORS[1:4] + OPERATORS[5:] if line.startswith(candidate, index)),
             None,

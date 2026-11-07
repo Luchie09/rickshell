@@ -13,6 +13,9 @@ class ResourceState:
     max_claim: list[list[int]]
     available: list[int]
     process_states: list[str] = field(default_factory=list)
+    # Optional outstanding requests for detection. When the input file has no
+    # Request section this stays None and detection falls back to Need.
+    request: list[list[int]] | None = None
 
     def __post_init__(self) -> None:
         if not self.process_states:
@@ -38,11 +41,18 @@ class ResourceState:
             [row.copy() for row in self.max_claim],
             self.available.copy(),
             self.process_states.copy(),
+            None if self.request is None else [row.copy() for row in self.request],
         )
 
     def pid(self, index: int) -> str:
         """Format a process index as its display identifier."""
         return f"P{index}"
+
+    def detection_requests(self) -> list[list[int]]:
+        """Return the matrix detection treats as each process's pending request."""
+        if self.request is not None:
+            return self.request
+        return self.need()
 
 
 def safety_check(
@@ -83,15 +93,15 @@ def safety_check(
 
 
 def detect(state: ResourceState) -> list[str]:
-    """Return processes that cannot finish when Need is their request."""
+    """Return processes that can never finish given their pending requests."""
     work = state.available.copy()
     finished = [False] * state.n
-    needed = state.need()
+    needed = state.detection_requests()
 
     while not all(finished):
         made_progress = False
-        # Detection uses Need as the outstanding request and releases each
-        # completed process's allocation, just like the safety-check loop.
+        # Same Work/Finish loop as the safety check, but compared against the
+        # pending request (Request matrix if given, otherwise Need).
         for process in range(state.n):
             if finished[process]:
                 continue
@@ -138,6 +148,7 @@ def request_resources(
         state.process_states[process] = "Waiting"
         return "wait", []
 
+    # Pretend to grant on a copy; dropping the copy is the rollback.
     trial = state.copy()
     for resource in range(state.m):
         trial.available[resource] -= vector[resource]
@@ -167,7 +178,8 @@ def recovery_suggestion(
     if not deadlocked_indices:
         return [], ""
 
-    needed = state.need()
+    # Use the same request matrix as detect() so the suggestion matches it.
+    needed = state.detection_requests()
     work = state.available.copy()
     # Processes not in the original deadlock finish in the initial detection
     # pass, so their allocations are available to the recovery simulation.

@@ -183,6 +183,8 @@ def cmd_deadlock(
         return 1
 
     if subcommand == "detect":
+        if state.request is not None:
+            stdout.write("Using the Request matrix from the file.\n")
         deadlocked = detect(state)
         if deadlocked:
             stdout.write(

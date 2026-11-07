@@ -1,4 +1,9 @@
-"""Simulated file permissions for the shell."""
+"""Simulated file permissions for the shell.
+
+Windows has no Unix permission bits, so chmod records modes in
+ctx.permissions instead of calling os.chmod. That keeps chmod and ls -l
+behaving the same on every OS. Modes last for the current session only.
+"""
 
 import getpass
 import os

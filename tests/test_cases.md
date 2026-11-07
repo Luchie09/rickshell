@@ -29,7 +29,8 @@ The suite uses `unittest` and lives in `tests/`. Shell commands are tested by ca
 |---|---|---|
 | `safe.txt` | 5 processes, 3 resources | Safe state with a safe sequence |
 | `unsafe.txt` | 2 processes, 2 resources, Available 0 0 | Both processes deadlocked |
-| `deadlock_chain.txt` | 3 processes, 1 resource, Available 0 | Recovery needing two terminations |
+| `deadlock_chain.txt` | 4 processes, 4 resources, two cycles, Available 0 0 0 0 | Recovery needing two terminations |
+| `detect_request.txt` | 3 processes, 2 resources, with a Request matrix | Unsafe for Banker's algorithm, yet not deadlocked |
 | `single.txt` | One process | Edge case: a single process |
 | `empty.txt` | n = 0 | Edge case: no processes |
 | `bad_dims.txt` | Wrong number of rows | Validation error |
@@ -79,7 +80,9 @@ MLFQ   | P1 | P2 | P3 | P4 | P1 | P2 | P3 | P4 | P1 | P3 |
 | `safe.txt` | `deadlock banker` | Safe, sequence `P1 -> P3 -> P4 -> P0 -> P2` |
 | `safe.txt` | `deadlock detect` | No deadlock found, no recovery output |
 | `unsafe.txt` | `deadlock detect` | Deadlocked: P0, P1. Recovery suggestion `Terminate P0`. Preemption note `Preempt R1 from P1` |
-| `deadlock_chain.txt` | `deadlock detect` | All three deadlocked. Recovery order P0, then P1 |
+| `deadlock_chain.txt` | `deadlock detect` | P0, P1, P2, P3 deadlocked. Recovery `Terminate P0, then P1`. Preemption note `Preempt R1 from P2` |
+| `detect_request.txt` | `deadlock banker` | Unsafe, stuck P0, P1, P2 |
+| `detect_request.txt` | `deadlock detect` | Uses the Request matrix. No deadlock found (P0, then P1, then P2 can be served) |
 
 ### Resource request cases (`safe.txt`)
 
@@ -104,7 +107,7 @@ MLFQ   | P1 | P2 | P3 | P4 | P1 | P2 | P3 | P4 | P1 | P3 |
 | Regex grep | `test_grep_regex.py` | `-E` features, `--groups`, escaped characters, character classes, invalid pattern returns 2, pipe input, line numbers |
 | if/then/else | `test_if.py` | True and false conditions, no `else`, missing `fi` or `then`, nested `if` rejected, `then` as an ordinary argument, `if` followed by more items |
 | Prompt and REPL | `test_repl.py`, `test_skeleton.py` | Prompt format at each directory depth, `help`, `exit`, unknown command returns 127 |
-| Easter egg | `test_rick.py` | Terminal-only output, screen restored after interruption, offline behavior, automatic triggers, on/off toggle, window scaling |
+| Easter egg | `test_rick.py` | Terminal-only output, screen restored after interruption, offline behavior, unknown-command trigger only (no trigger on success), on/off toggle, window scaling |
 
 ### Error cases
 
@@ -134,4 +137,5 @@ Each simulator is tested with more than three inputs, including empty and single
 | Deadlock loader and detection | `test_deadlock_basics.py`, `test_deadlock_command.py` | Sample files, invalid inputs, wrong row width, negative values, partial deadlock, state never modified, usage errors |
 | Banker's requests | `test_deadlock_request.py` | Granted, exceeded, wait, unsafe denied with rollback, zero vector, invalid requests, plain `banker` output unchanged |
 | Recovery | `test_deadlock_recovery.py` | Unsafe sample, two-step chain, safe state prints nothing, single and empty states |
+| Request matrix and MLFQ demotion trace | `test_deadlock_request_matrix.py` | Loading the optional Request rows, unsafe-but-not-deadlocked detection, deadlock with requests, Banker ignores requests, `demoted to Level N` trace lines |
 | Compare | `test_compare.py` | Averages and best algorithms on `p_basic.txt`, empty and single process, `--save` creates the folder and lists all six names, missing file and bad quantum |

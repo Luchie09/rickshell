@@ -88,11 +88,16 @@ def load_resources(path: str) -> "ResourceState":
     if n < 0 or m < 0:
         raise LoaderError(f"line {header_line}: n and m must not be negative")
 
+    # Allocation (n rows) + Max (n rows) + Available (1 row), optionally
+    # followed by a Request matrix (n rows) used only by deadlock detection.
     expected_rows = 2 * n + 1
     actual_rows = len(data_rows) - 1
-    if actual_rows != expected_rows:
+    has_request = n > 0 and actual_rows == expected_rows + n
+    if actual_rows != expected_rows and not has_request:
         raise LoaderError(
-            f"expected {expected_rows} data rows, found {actual_rows} rows"
+            f"expected {expected_rows} data rows "
+            f"(or {expected_rows + n} with a Request matrix), "
+            f"found {actual_rows} rows"
         )
 
     parsed_rows: list[list[int]] = []
@@ -127,4 +132,12 @@ def load_resources(path: str) -> "ResourceState":
                     f"exceeds Max[P{process_index}][R{resource_index}]"
                 )
 
-    return ResourceState(n, m, allocation, max_claim, available)
+    request = parsed_rows[2 * n + 1 :] if has_request else None
+    return ResourceState(
+        n,
+        m,
+        allocation,
+        max_claim,
+        available,
+        request=request,
+    )

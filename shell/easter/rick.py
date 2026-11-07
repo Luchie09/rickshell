@@ -148,11 +148,3 @@ def _play(
 def play_rick(stdout: TextIO) -> None:
     """Stream the live animation until interrupted."""
     _play(stdout, None, stream_timeout=3, show_hint=True)
-
-
-def play_silent(
-    stdout: TextIO,
-    duration: float = 2.0,
-) -> None:
-    """Stream the live animation for a bounded automatic trigger."""
-    _play(stdout, duration, stream_timeout=1)
